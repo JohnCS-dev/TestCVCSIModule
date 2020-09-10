@@ -5,3 +5,5 @@ SOURCES += \
 
 HEADERS += \
     $$PWD/tcptransmissionmodule.h
+
+INCLUDEPATH += $$PWD

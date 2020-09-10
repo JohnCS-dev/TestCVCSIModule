@@ -1,5 +1,4 @@
 #include "tcptransmissionmodule.h"
-#include <QTcpSocket>
 
 TCPTransmissionModule::TCPTransmissionModule(QObject *parent) : QObject(parent)
 {
@@ -17,12 +16,25 @@ void TCPTransmissionModule::startServer(quint16 port)
     }
 
     serverClientSocket = nullptr;
-    connect(tcpServer, SIGNAL(newConnection()), this, SLOT(serverNewConnection()));
+    connect(&tcpServer, SIGNAL(newConnection()), this, SLOT(serverNewConnection()));
 }
 
-void TCPTransmissionModule::startClient()
+void TCPTransmissionModule::startClient(QString host, quint16 port)
 {
-    //---
+    if (tcpClient.isOpen())
+        return;
+    tcpClient.connectToHost(host, port);
+
+    connect(&tcpClient, SIGNAL(readyRead()), this, SLOT(tcpClientSocketRead()));
+    connect(&tcpClient, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(tcpClientError(QAbstractSocket::SocketError)));
+
+}
+
+void TCPTransmissionModule::stopClient()
+{
+    tcpClient.disconnectFromHost();
+    disconnect(&tcpClient, SIGNAL(readyRead()), this, SLOT(tcpClientSocketRead()));
+    disconnect(&tcpClient, SIGNAL(error(QAbstractSocket::SocketError socketError)), this, SLOT(tcpClientError(QAbstractSocket::SocketError socketError)));
 }
 
 void TCPTransmissionModule::serverSendData(TCPSignature signature, std::vector<uchar> &data)
@@ -42,7 +54,7 @@ void TCPTransmissionModule::serverSendData(TCPSignature signature, std::vector<u
 
 void TCPTransmissionModule::serverNewConnection()
 {
-    QTcpSocket* clientSocket = tcpServer->nextPendingConnection();
+    QTcpSocket* clientSocket = tcpServer.nextPendingConnection();
     if (serverClientSocket) {
         clientSocket->disconnectFromHost();
         clientSocket->deleteLater();
@@ -93,5 +105,27 @@ void TCPTransmissionModule::serverClientSocketRead()
 //            sendToClient(clientSocket,
 //                         "Server Response: Received \"" + str + "\""
 //                        );
-//        }
+    //        }
+}
+
+void TCPTransmissionModule::tcpClientError(QAbstractSocket::SocketError)
+{
+    qInfo() << "Client:" << tcpClient.errorString();
+}
+
+void TCPTransmissionModule::tcpClientSocketRead()
+{
+    if (lastClientHeader.dataSize == 0) {
+        if (tcpClient.bytesAvailable() < sizeof(TCPHeader))
+            return;
+
+        tcpClient.read((char*)&lastClientHeader, sizeof(TCPHeader));
+    }
+
+    if (tcpClient.bytesAvailable() < lastClientHeader.dataSize)
+        return;
+
+    QByteArray buf = tcpClient.read(lastClientHeader.dataSize);
+    emit newClientData(lastClientHeader.signature, buf);
+    lastClientHeader = TCPHeader();
 }
