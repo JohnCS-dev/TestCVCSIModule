@@ -1,6 +1,6 @@
 #include "tcptransmissionmodule.h"
 
-TCPTransmissionModule::TCPTransmissionModule(QObject *parent) : QObject(parent)
+TCPTransmissionModule::TCPTransmissionModule(QObject *parent) : QObject(parent), serverClientSocket(nullptr)
 {
 
 }
